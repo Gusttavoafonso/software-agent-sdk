@@ -53,6 +53,8 @@ _EXCLUDED_EXAMPLES = {
     "examples/01_standalone_sdk/01_hello_world.py",
     "examples/01_standalone_sdk/04_confirmation_mode_example.py",
     "examples/01_standalone_sdk/06_interactive_terminal_w_reasoning.py",
+    # Requires interactive input() which fails in CI with EOFError
+    "examples/01_standalone_sdk/63_step_metrics_cli.py",
     "examples/01_standalone_sdk/08_mcp_with_oauth.py",
     "examples/01_standalone_sdk/15_browser_use.py",
     "examples/01_standalone_sdk/16_llm_security_analyzer.py",
