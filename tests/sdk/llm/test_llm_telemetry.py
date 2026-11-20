@@ -499,6 +499,33 @@ class TestTelemetryCostCalculation:
             assert kwargs["model"] == "responses/gpt-5.2-chat"
             assert kwargs["custom_llm_provider"] == "azure"
 
+    def test_on_response_records_cost_under_the_response_id(self, basic_telemetry):
+        """on_response must thread the response's id into the recorded Cost.
+
+        Step-level telemetry (openhands.sdk.conversation.step_metrics)
+        correlates Cost records with ActionEvents by response id — if
+        on_response ever stopped passing it through, every real cost_delta
+        would silently become None while this file's other tests (which
+        call Metrics.add_cost directly) would keep passing.
+        """
+        mock_response = ModelResponse(
+            id="resp-under-test",
+            choices=[],
+            created=1234567890,
+            model="gpt-4o",
+            object="chat.completion",
+            usage=Usage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
+        )
+
+        with patch(
+            "openhands.sdk.llm.utils.telemetry.litellm_completion_cost"
+        ) as mock_cost:
+            mock_cost.return_value = 0.42
+            basic_telemetry.on_response(mock_response)
+
+        assert basic_telemetry.metrics.costs[-1].response_id == "resp-under-test"
+        assert basic_telemetry.metrics.costs[-1].cost == 0.42
+
 
 class TestTelemetryLogging:
     """Test telemetry logging functionality."""

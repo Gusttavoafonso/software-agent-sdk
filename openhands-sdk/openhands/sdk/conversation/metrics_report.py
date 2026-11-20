@@ -25,10 +25,14 @@ def _format_cost(cost_delta: float | None) -> str:
     return "—" if cost_delta is None else f"${cost_delta:.4f}"
 
 
+def _tool_label(tool_names: list[str]) -> str:
+    return ", ".join(tool_names) if tool_names else "(message)"
+
+
 def _step_row(step: StepMetric) -> tuple[str, ...]:
     return (
         str(step.step_index),
-        ", ".join(step.tool_names),
+        _tool_label(step.tool_names),
         "—" if step.prompt_tokens is None else str(step.prompt_tokens),
         "—" if step.completion_tokens is None else str(step.completion_tokens),
         _format_cache_hit_rate(step.cache_hit_rate),
@@ -69,7 +73,7 @@ def export_metrics_report(
         content = _render_markdown_report(breakdown, metrics)
     else:
         raise ValueError(f"Unsupported format: {format!r}")
-    Path(path).write_text(content)
+    Path(path).write_text(content, encoding="utf-8")
 
 
 def _render_markdown_report(breakdown: list[StepMetric], metrics: Metrics) -> str:
@@ -106,7 +110,7 @@ def _top_steps_lines(breakdown: list[StepMetric], *, key) -> list[str]:
         return ["- (none)"]
     return [
         f"- Step {step.step_index} [{step.llm_response_id}] "
-        f"({', '.join(step.tool_names)}): "
+        f"({_tool_label(step.tool_names)}): "
         f"cost={_format_cost(step.cost_delta)}, "
         f"latency={_format_latency(step.latency_seconds)}s"
         for step in ranked

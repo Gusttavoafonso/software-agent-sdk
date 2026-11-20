@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from openhands.sdk.event.base import Event
 from openhands.sdk.event.llm_convertible.action import ActionEvent
+from openhands.sdk.event.llm_convertible.message import MessageEvent
 from openhands.sdk.llm.utils.metrics import (
     Cost,
     Metrics,
@@ -33,19 +34,28 @@ class StepMetric(BaseModel):
 
 
 def build_step_breakdown(events: Sequence[Event], metrics: Metrics) -> list[StepMetric]:
-    """Correlate ``ActionEvent``s with ``metrics`` by ``llm_response_id``.
+    """Correlate agent LLM responses with ``metrics`` by ``llm_response_id``.
 
     All ``ActionEvent``s sharing one ``llm_response_id`` (parallel tool
     calls from a single LLM response) collapse into one step, so cost and
-    latency are never double-counted.
+    latency are never double-counted. A text-only agent reply (a
+    ``MessageEvent`` with no accompanying ``ActionEvent``) is still a step
+    with an empty ``tool_names``, since it is still billed in ``metrics``
+    under its own ``llm_response_id`` — without it, the sum of step costs
+    would fall short of ``metrics.accumulated_cost``.
     """
     tool_names_by_response_id: dict[str, list[str]] = {}
     for event in events:
-        if not isinstance(event, ActionEvent):
-            continue
-        tool_names_by_response_id.setdefault(event.llm_response_id, []).append(
-            event.tool_name
-        )
+        if isinstance(event, ActionEvent):
+            tool_names_by_response_id.setdefault(event.llm_response_id, []).append(
+                event.tool_name
+            )
+        elif (
+            isinstance(event, MessageEvent)
+            and event.source == "agent"
+            and event.llm_response_id is not None
+        ):
+            tool_names_by_response_id.setdefault(event.llm_response_id, [])
 
     costs_by_response_id: dict[str, Cost] = {}
     for cost in metrics.costs:

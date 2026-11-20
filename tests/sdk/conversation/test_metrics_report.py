@@ -74,6 +74,25 @@ def test_export_metrics_report_markdown_contains_top_costly_and_slow_steps(tmp_p
     assert "r0" in text  # timeline still includes every step
 
 
+def test_export_metrics_report_markdown_is_utf8(tmp_path):
+    # The report uses "—" (em dash) for missing values; on Windows the
+    # default locale encoding (cp1252) can't round-trip it, so the file
+    # must be written explicitly as UTF-8.
+    metrics = Metrics(model_name="gpt-5")
+    out = tmp_path / "report.md"
+
+    export_metrics_report([], metrics, out, format="markdown")
+
+    out.read_bytes().decode("utf-8")  # raises UnicodeDecodeError if not UTF-8
+
+
+@pytest.mark.parametrize("format", ["markdown", "json"])
+def test_export_metrics_report_empty_breakdown_does_not_crash(tmp_path, format):
+    out = tmp_path / f"report.{format}"
+    export_metrics_report([], Metrics(model_name="gpt-5"), out, format=format)
+    assert out.exists()
+
+
 def test_export_metrics_report_unknown_format_raises(tmp_path):
     with pytest.raises(ValueError):
         export_metrics_report(

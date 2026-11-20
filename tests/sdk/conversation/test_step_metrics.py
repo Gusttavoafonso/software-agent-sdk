@@ -125,3 +125,36 @@ def test_build_step_breakdown_ignores_non_action_events():
     )
     breakdown = build_step_breakdown([message_event], metrics)
     assert breakdown == []
+
+
+def test_build_step_breakdown_includes_text_only_agent_response_as_a_step():
+    # A text-only reply (no tool call) is still billed in `metrics.costs`
+    # under its own llm_response_id — it must still surface as a step, or
+    # the sum of step costs silently falls short of accumulated_cost.
+    metrics = Metrics(model_name="gpt-5")
+    metrics.add_cost(0.07, response_id="resp-1")
+    message_event = MessageEvent(
+        source="agent",
+        llm_message=Message(role="assistant", content=[TextContent(text="done")]),
+        llm_response_id="resp-1",
+    )
+
+    breakdown = build_step_breakdown([message_event], metrics)
+
+    assert len(breakdown) == 1
+    assert breakdown[0].tool_names == []
+    assert breakdown[0].cost_delta == 0.07
+
+
+def test_build_step_breakdown_ignores_user_message_even_with_response_id():
+    # llm_response_id is documented as None for non-agent sources, but
+    # build_step_breakdown must not treat a user/system message as a step
+    # even if one were ever set.
+    metrics = Metrics(model_name="gpt-5")
+    message_event = MessageEvent(
+        source="user",
+        llm_message=Message(role="user", content=[TextContent(text="hi")]),
+        llm_response_id="resp-1",
+    )
+    breakdown = build_step_breakdown([message_event], metrics)
+    assert breakdown == []
