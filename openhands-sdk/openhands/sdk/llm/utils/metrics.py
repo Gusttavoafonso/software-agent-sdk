@@ -9,6 +9,10 @@ class Cost(BaseModel):
     model: str
     cost: float = Field(ge=0.0, description="Cost must be non-negative")
     timestamp: float = Field(default_factory=time.time)
+    response_id: str = Field(
+        default="",
+        description="Completion/Response ID that produced this cost, if known",
+    )
 
     @field_validator("cost")
     @classmethod
@@ -16,6 +20,24 @@ class Cost(BaseModel):
         if v < 0:
             raise ValueError("Cost cannot be negative")
         return v
+
+
+def compute_cache_hit_rate(prompt_tokens: int, cache_read_tokens: int) -> float | None:
+    """Fraction of input tokens served from cache (0.0-1.0).
+
+    None when there is no input to measure. litellm/OpenAI count cached
+    reads inside ``prompt_tokens`` (the denominator); ACP reports them
+    separately, so when ``cache_read_tokens`` exceeds ``prompt_tokens`` the
+    denominator is their sum.
+    """
+    denom = (
+        prompt_tokens + cache_read_tokens
+        if cache_read_tokens > prompt_tokens
+        else prompt_tokens
+    )
+    if denom <= 0:
+        return None
+    return cache_read_tokens / denom
 
 
 class ResponseLatency(BaseModel):
@@ -102,11 +124,7 @@ class MetricsSnapshot(BaseModel):
         usage = self.accumulated_token_usage
         if usage is None:
             return None
-        prompt, cache_read = usage.prompt_tokens, usage.cache_read_tokens
-        denom = prompt + cache_read if cache_read > prompt else prompt
-        if denom <= 0:
-            return None
-        return cache_read / denom
+        return compute_cache_hit_rate(usage.prompt_tokens, usage.cache_read_tokens)
 
 
 @final
@@ -186,14 +204,22 @@ class Metrics(MetricsSnapshot):
         except AttributeError:  # never attached: the slot is still empty
             return None
 
-    def add_cost(self, value: float, *, model_name: str | None = None) -> None:
+    def add_cost(
+        self, value: float, *, model_name: str | None = None, response_id: str = ""
+    ) -> None:
         if value < 0:
             raise ValueError("Added cost cannot be negative.")
         self.accumulated_cost += value
-        self.costs.append(Cost(cost=value, model=model_name or self.model_name))
+        self.costs.append(
+            Cost(
+                cost=value,
+                model=model_name or self.model_name,
+                response_id=response_id,
+            )
+        )
         target = self.rolls_up_into
         if target is not None:
-            target.add_cost(value, model_name=model_name)
+            target.add_cost(value, model_name=model_name, response_id=response_id)
 
     def add_response_latency(
         self, value: float, response_id: str, *, model_name: str | None = None

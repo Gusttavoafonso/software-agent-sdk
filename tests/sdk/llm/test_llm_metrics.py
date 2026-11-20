@@ -9,6 +9,7 @@ from openhands.sdk.llm.utils.metrics import (
     MetricsSnapshot,
     ResponseLatency,
     TokenUsage,
+    compute_cache_hit_rate,
 )
 
 
@@ -692,3 +693,40 @@ def test_metrics_roll_up_target_is_wiring_not_data():
 
     with pytest.raises(ValueError, match="roll up into itself"):
         ledger.roll_up_into(ledger)
+
+
+def test_cost_creation_with_response_id():
+    cost = Cost(model="gpt-5", cost=1.0, response_id="resp-1")
+    assert cost.response_id == "resp-1"
+
+
+def test_cost_creation_default_response_id():
+    cost = Cost(model="gpt-5", cost=1.0)
+    assert cost.response_id == ""
+
+
+def test_metrics_add_cost_with_response_id():
+    metrics = Metrics(model_name="gpt-5")
+    metrics.add_cost(5.0, response_id="resp-1")
+    assert metrics.costs[0].response_id == "resp-1"
+
+
+def test_metrics_add_cost_default_response_id():
+    metrics = Metrics(model_name="gpt-5")
+    metrics.add_cost(5.0)
+    assert metrics.costs[0].response_id == ""
+
+
+def test_metrics_roll_up_into_propagates_cost_response_id():
+    total = Metrics(model_name="gpt-5")
+    partial = Metrics(model_name="gpt-5")
+    partial.roll_up_into(total)
+    partial.add_cost(2.0, response_id="resp-1")
+    assert total.costs[0].response_id == "resp-1"
+
+
+def test_compute_cache_hit_rate_matches_existing_formula():
+    assert compute_cache_hit_rate(prompt_tokens=0, cache_read_tokens=0) is None
+    assert compute_cache_hit_rate(prompt_tokens=100, cache_read_tokens=25) == 0.25
+    # cache_read exceeding prompt: denominator becomes their sum (ACP case)
+    assert compute_cache_hit_rate(prompt_tokens=10, cache_read_tokens=30) == 0.75

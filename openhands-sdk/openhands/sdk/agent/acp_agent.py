@@ -2260,7 +2260,7 @@ class ACPAgent(AgentBase):
             last_cost = self._client._last_cost_by_session.get(session_id, 0.0)
             delta = usage_update.cost.amount - last_cost
             if delta > 0:
-                metrics.add_cost(delta)
+                metrics.add_cost(delta, response_id=session_id)
                 cost_recorded = True
             self._client._last_cost_by_session[session_id] = usage_update.cost.amount
             self._client._last_cost = usage_update.cost.amount
@@ -2291,7 +2291,7 @@ class ACPAgent(AgentBase):
                 self.acp_model, input_tokens, output_tokens
             )
             if cost > 0:
-                metrics.add_cost(cost)
+                metrics.add_cost(cost, response_id=session_id)
 
         if not cost_recorded and not input_tokens and not output_tokens:
             # gemini-cli currently returns response.usage=None and

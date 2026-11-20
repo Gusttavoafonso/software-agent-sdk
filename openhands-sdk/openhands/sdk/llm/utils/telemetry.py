@@ -329,7 +329,9 @@ class Telemetry(BaseModel):
         cost = self._compute_cost(resp, provider_info=provider_info)
         # A confirmed zero charge is different from unavailable pricing.
         if cost is not None:
-            self.metrics.add_cost(cost, model_name=self.model_name)
+            self.metrics.add_cost(
+                cost, model_name=self.model_name, response_id=response_id
+            )
 
         # 3) tokens - normalize the provider's usage shape exactly once
         usage = normalize_usage(_response_usage(resp))
